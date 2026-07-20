@@ -11,6 +11,9 @@ library(ggExtra)
 library(viridis) ## for viridis palettes
 library(scico) ## in case these palettes useful: https://github.com/thomasp85/scico
 
+## size threshold for calling small plasmids
+SIZE_THRESHOLD <- 10000
+
 ################################################################################
 ## Regular expressions used in this analysis.
 
@@ -142,7 +145,7 @@ make_transposon_PCN_base_plot <- function(transposon.annotated.PCN.data) {
       size = 0.5) +
     geom_hline(yintercept=0,linetype="dashed",color="gray") +
     theme_classic() +
-    scale_color_scico(palette = "batlow", name="MGE count") +
+    scale_color_scico(palette = "vanimo", name="transposon count") +
     ## make the points in the legend larger.
     xlab("log10(length)")  +
     ylab("log10(copy number)") +
@@ -229,6 +232,18 @@ ARG.annotated.PCN.data <- PCN.data |>
   ## Note: this is the minus sign character "−" U+2212 in Unicode.
   mutate(has_ARG = ifelse(ARG_count > 0, TRUE, FALSE))
 
+## 12,006 plasmids.
+nrow(ARG.annotated.PCN.data)
+
+## 3364 small plasmids.
+nrow(filter(ARG.annotated.PCN.data, replicon_length < SIZE_THRESHOLD))
+
+## 3870 plasmids have ARGs.
+nrow(filter(ARG.annotated.PCN.data, ARG_count > 0))
+
+##223 small plasmids (< 10 kB have ARGs)
+nrow(filter(filter(ARG.annotated.PCN.data, ARG_count > 0), replicon_length < SIZE_THRESHOLD))
+
 ## scatterplot of log10(Normalized plasmid copy number) vs. log10(plasmid length).
 ## using a somewhat unusual plotting strategy to avoid overplotting points with ARGs
 Fig1_base <- make_ARG_PCN_base_plot(ARG.annotated.PCN.data)
@@ -269,7 +284,7 @@ Fig1 <- plot_grid(plot_grid(Fig1A, Fig1B, nrow = 1, labels=c("A","B")), Fig1CD, 
 
 ## Draft figure 1, showing that ARGs are largely on large conjugative plasmids,
 ## and rarely on small plasmids (but this is observed).
-ggsave("../results/Fig1.pdf", Fig1, width=7,height=8.5)
+ggsave("../results/Fig1.pdf", Fig1, width=7.5,height=8.5)
 
 
 ################################################################################
@@ -516,11 +531,10 @@ Fig2 <- plot_grid(plot_grid(Fig2A, Fig2B, labels = c("A", "B"), nrow = 1), Fig2C
 
 ## Draft figure 2, showing that transposons are largely on large conjugative plasmids,
 ## and rarely on small plasmids (but this is observed).
-ggsave("../results/Fig2.pdf", Fig2, width=7,height=8.5)
+ggsave("../results/Fig2.pdf", Fig2, width=7.5, height=8.5)
 
 ###########################################################################
 ## Given these findings, what functions ARE found on smaller plasmids <10kB in size?
-SIZE_THRESHOLD <- 10000
 
 small.plasmid.proteins <- plasmid.proteins |> filter(replicon_length < SIZE_THRESHOLD)
 
