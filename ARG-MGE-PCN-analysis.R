@@ -14,20 +14,6 @@ library(scico) ## in case these palettes useful: https://github.com/thomasp85/sc
 ################################################################################
 ## Regular expressions used in this analysis.
 
-## We build on the regular expressions used by Zeevi et al. (2019).
-## Transposon: ‘transpos\S*|insertion|Tra[A-Z]|Tra[0-9]|IS[0-9]|conjugate transposon’
-## plasmid: ‘relax\S*|conjug\S*|mob\S*|plasmid|type IV|chromosome partitioning|chromosome segregation’
-## phage: ‘capsid|phage|tail|head|tape measure|antiterminatio’
-## other HGT mechanisms: ‘integrase|excision\S*|exo- nuclease|recomb|toxin|restrict\S*|resolv\S*|topoisomerase|reverse transcrip’
-## antibiotic resistance: ‘azole resistance|antibiotic resistance|TetR|tetracycline resistance|VanZ|betalactam\S*|beta-lactam|antimicrob\S*|lantibio\S*’.
-
-
-## unknown protein keywords.
-unknown.protein.keywords <- "unknown|Unknown|hypothetical|Hypothetical|Uncharacterized|Uncharacterised|uncharacterized|uncharacterised|DUF|unknow|putative protein in bacteria|Unassigned|unassigned"
-
-## NOTE: some hypothetical proteins are "ISXX family insertion sequence hypothetical protein"
-## so filter out those cases, when counting unknown proteins.
-
 ## "Tra" actually matches genes involved in conjugative transfer, which is better matched for plasmid functions rather than transposon functions!
 ## This is an oversight in the regular expressions used in the Zeevi et al. 2019 paper.
 
@@ -36,7 +22,6 @@ transposon.keywords <- "IS|transpos\\S*|insertion|Transpos\\S*|Tn[0-9]|tranposas
 plasmid.keywords <- "relax\\S*|conjug\\S*|Tra[A-Z]|Tra[0-9]|tra[A-Z]|mob\\S*|plasmid|chromosome partitioning|chromosome segregation|Mob\\S*|Plasmid|Rep|Conjug\\S*"
 phage.keywords <- "capsid|phage|Tail|tail|head|tape measure|antiterminatio|Phage|virus|Baseplate|baseplate|coat|entry exclusion|Integrase|integrase"
 other.HGT.keywords <- "excision\\S*|exonuclease|recomb|toxin|restrict\\S*|resolv\\S*|topoisomerase|reverse transcrip|intron|antitoxin|toxin|Toxin|Reverse transcriptase|hok|Hok|competence|addiction|type IV|conjugate transposon|post-segregation killing"
-
 
 MGE.keywords <- paste(transposon.keywords, plasmid.keywords, phage.keywords, other.HGT.keywords, sep="|")
 MGE.or.unknown.protein.keywords <- paste(MGE.keywords,unknown.protein.keywords,sep="|")
@@ -171,36 +156,6 @@ make_transposon_PCN_base_plot <- function(transposon.annotated.PCN.data) {
 }
 
 
-make_phage_PCN_base_plot <- function(phage.annotated.PCN.data) {
-  ## Make the basic plot for Figure 3,
-  ## before adding the marginal histograms or facetting
-  phage.annotated.PCN.data |>
-    ggplot() +
-    geom_point(
-      data = subset(phage.annotated.PCN.data, has_phage == FALSE),
-      aes(x = log10_replicon_length, y = log10_PIRACopyNumber),
-      color = "grey80",
-      size = 0.5, alpha=0.8) +
-    geom_point(
-      data = subset(phage.annotated.PCN.data, has_phage == TRUE),
-      aes(x = log10_replicon_length, y = log10_PIRACopyNumber, color = phage_gene_count),
-      size = 0.5) +
-    geom_hline(yintercept=0,linetype="dashed",color="gray") +
-    theme_classic() +
-    scale_color_scico(palette = "batlow", name="MGE count") +
-    ## make the points in the legend larger.
-    xlab("log10(length)")  +
-    ylab("log10(copy number)") +
-    theme(legend.position = "bottom") +
-    theme(strip.background = element_blank()) +
-    theme(
-      axis.title.x = element_text(size=11),
-      axis.title.y = element_text(size=11),
-      axis.text.x  = element_text(size=11),
-      axis.text.y  = element_text(size=11))
-}
-
-
 ################################################################################
 ## Set up the key data structures for the analysis,
 ## gbk.annotation, in particular.
@@ -306,15 +261,15 @@ Fig1D_base <- ARG.annotated.PCN.data |>
   make_PCN_base_plot() + ggtitle("ARG+ plasmids") + guides(color="none")
 Fig1D <- ggExtra::ggMarginal(Fig1D_base, groupColour = TRUE, groupFill = TRUE, margins="both")
 
-Fig1CD <- plot_grid(plot_grid(Fig1C, Fig1D, nrow=1),Fig1CD_legend, nrow=2,rel_heights=c(1,0.05))
+Fig1CD <- plot_grid(plot_grid(Fig1C, Fig1D, nrow=1, labels=c("C","D")),Fig1CD_legend, nrow=2,rel_heights=c(1,0.05))
 
 Fig1CD
 
-Fig1 <- plot_grid(plot_grid(Fig1A, Fig1B, nrow = 1), Fig1CD, nrow = 2)
+Fig1 <- plot_grid(plot_grid(Fig1A, Fig1B, nrow = 1, labels=c("A","B")), Fig1CD, nrow = 2)
 
 ## Draft figure 1, showing that ARGs are largely on large conjugative plasmids,
 ## and rarely on small plasmids (but this is observed).
-Fig1
+ggsave("../results/Fig1.pdf", Fig1, width=7,height=8.5)
 
 
 ################################################################################
@@ -477,7 +432,20 @@ S12Fig <- PCN.data |>
   make_ARG_PCN_base_plot() +
   facet_wrap(.~Annotation) +
   ggtitle("Other antimicrobial resistance")
- 
+
+ggsave("../results/S1Fig.pdf", S1Fig, width=8)
+ggsave("../results/S2Fig.pdf", S2Fig, width=8)
+ggsave("../results/S3Fig.pdf", S3Fig, width=8)
+ggsave("../results/S4Fig.pdf", S4Fig, width=8)
+ggsave("../results/S5Fig.pdf", S5Fig, width=8)
+ggsave("../results/S6Fig.pdf", S6Fig, width=8)
+ggsave("../results/S7Fig.pdf", S7Fig, width=8)
+ggsave("../results/S8Fig.pdf", S8Fig, width=8)
+ggsave("../results/S9Fig.pdf", S9Fig, width=8)
+ggsave("../results/S10Fig.pdf", S10Fig, width=8)
+ggsave("../results/S11Fig.pdf", S11Fig, width=8)
+ggsave("../results/S12Fig.pdf", S12Fig, width=8)
+
 
 ##################################################################
 ## This data frame is just to check internal consistency, not for plotting.
@@ -542,15 +510,13 @@ Fig2D_base <- transposon.annotated.PCN.data |>
   make_PCN_base_plot() + ggtitle("transposon+ plasmids") + guides(color="none")
 Fig2D <- ggExtra::ggMarginal(Fig2D_base, groupColour = TRUE, groupFill = TRUE, margins="both")
 
-Fig2CD <- plot_grid(plot_grid(Fig2C, Fig2D, nrow=1),Fig2CD_legend, nrow=2,rel_heights=c(1,0.05))
+Fig2CD <- plot_grid(plot_grid(Fig2C, Fig2D, labels = c("C","D"), nrow=1), Fig2CD_legend, nrow=2,rel_heights=c(1,0.05))
 
-Fig2CD
-
-Fig2 <- plot_grid(plot_grid(Fig2A, Fig2B, nrow = 1), Fig2CD, nrow = 2)
+Fig2 <- plot_grid(plot_grid(Fig2A, Fig2B, labels = c("A", "B"), nrow = 1), Fig2CD, nrow = 2)
 
 ## Draft figure 2, showing that transposons are largely on large conjugative plasmids,
 ## and rarely on small plasmids (but this is observed).
-Fig2
+ggsave("../results/Fig2.pdf", Fig2, width=7,height=8.5)
 
 ###########################################################################
 ## Given these findings, what functions ARE found on smaller plasmids <10kB in size?
