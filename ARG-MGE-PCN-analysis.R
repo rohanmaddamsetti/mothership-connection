@@ -27,8 +27,6 @@ phage.keywords <- "capsid|phage|Tail|tail|head|tape measure|antiterminatio|Phage
 other.HGT.keywords <- "excision\\S*|exonuclease|recomb|toxin|restrict\\S*|resolv\\S*|topoisomerase|reverse transcrip|intron|antitoxin|toxin|Toxin|Reverse transcriptase|hok|Hok|competence|addiction|type IV|conjugate transposon|post-segregation killing"
 
 MGE.keywords <- paste(transposon.keywords, plasmid.keywords, phage.keywords, other.HGT.keywords, sep="|")
-MGE.or.unknown.protein.keywords <- paste(MGE.keywords,unknown.protein.keywords,sep="|")
-
 
 ## antibiotic-specific keywords.
 chloramphenicol.keywords <- "chloramphenicol|Chloramphenicol"
@@ -223,7 +221,12 @@ plasmid.ARG.totals.df <- plasmid.ARGs |>
 
 
 ################################################################################
-## Figure 1. ARGs are concentrated in larger plasmids, and rarer in small plasmids.
+## Figure 1. Experiments have shown that small multicopy plasmids can
+## promote antibiotic resistance in several ways.
+## This is a conceptual figure / illustration that I made separately by hand.
+
+################################################################################
+## Figure 2. ARGs are concentrated in larger plasmids, and rarer in small plasmids.
 
 ARG.annotated.PCN.data <- PCN.data |>
   left_join(plasmid.ARG.totals.df) |>
@@ -246,45 +249,43 @@ nrow(filter(filter(ARG.annotated.PCN.data, ARG_count > 0), replicon_length < SIZ
 
 ## scatterplot of log10(Normalized plasmid copy number) vs. log10(plasmid length).
 ## using a somewhat unusual plotting strategy to avoid overplotting points with ARGs
-Fig1_base <- make_ARG_PCN_base_plot(ARG.annotated.PCN.data)
+Fig2_base <- make_ARG_PCN_base_plot(ARG.annotated.PCN.data)
 
 ## add the marginal histogram to Figure A.
-Fig1A <- ggExtra::ggMarginal(Fig1_base, margins="both")
+Fig2A <- ggExtra::ggMarginal(Fig2_base, margins="both")
 
 ## Figure 1B: facet by ecological annotation.
 ## By eye, looks like there may be some enrichment of ARGs on small plasmids
 ## in humans but unclear-- need statistics to be rigorous.
-Fig1B <- Fig1_base + guides(color = "none") + facet_wrap(.~Annotation)
+Fig2B <- Fig2_base + guides(color = "none") + facet_wrap(.~Annotation)
 
 
 ## Figure 1CD: show differences in mobility type.
 ## IMPORTANT: report in figure legend that NA datapoints were removed.
-Fig1C_base <- ARG.annotated.PCN.data |>
+Fig2C_base <- ARG.annotated.PCN.data |>
   filter(!is.na(PredictedMobility)) |>
   filter(has_ARG==FALSE) |>
   make_PCN_base_plot() + ggtitle("ARG− plasmids")
 
 ## Get the legend.
-Fig1CD_legend <- get_legend(Fig1C_base)
+Fig2CD_legend <- get_legend(Fig2C_base)
 ## now remove the legend from base figure.
-Fig1C_base <- Fig1C_base + guides(color="none")
-Fig1C <- ggExtra::ggMarginal(Fig1C_base, groupColour = TRUE, groupFill = TRUE, margins="both")
+Fig2C_base <- Fig2C_base + guides(color="none")
+Fig2C <- ggExtra::ggMarginal(Fig2C_base, groupColour = TRUE, groupFill = TRUE, margins="both")
 
-Fig1D_base <- ARG.annotated.PCN.data |>
+Fig2D_base <- ARG.annotated.PCN.data |>
   filter(!is.na(PredictedMobility)) |>
   filter(has_ARG==TRUE) |>
   make_PCN_base_plot() + ggtitle("ARG+ plasmids") + guides(color="none")
-Fig1D <- ggExtra::ggMarginal(Fig1D_base, groupColour = TRUE, groupFill = TRUE, margins="both")
+Fig2D <- ggExtra::ggMarginal(Fig2D_base, groupColour = TRUE, groupFill = TRUE, margins="both")
 
-Fig1CD <- plot_grid(plot_grid(Fig1C, Fig1D, nrow=1, labels=c("C","D")),Fig1CD_legend, nrow=2,rel_heights=c(1,0.05))
+Fig2CD <- plot_grid(plot_grid(Fig2C, Fig2D, nrow=1, labels=c("C","D")),Fig2CD_legend, nrow=2,rel_heights=c(1,0.05))
 
-Fig1CD
-
-Fig1 <- plot_grid(plot_grid(Fig1A, Fig1B, nrow = 1, labels=c("A","B")), Fig1CD, nrow = 2)
+Fig2 <- plot_grid(plot_grid(Fig2A, Fig2B, nrow = 1, labels=c("A","B")), Fig2CD, nrow = 2)
 
 ## Draft figure 1, showing that ARGs are largely on large conjugative plasmids,
 ## and rarely on small plasmids (but this is observed).
-ggsave("../results/Fig1.pdf", Fig1, width=7.5,height=8.5)
+ggsave("../results/Fig2.pdf", Fig2, width=7.5,height=8.5)
 
 
 ################################################################################
@@ -477,7 +478,7 @@ stopifnot(all.equal(plasmid.all.ARG.classes.totals.df, plasmid.ARG.totals.df))
 
 
 ##################################################################
-## Figure 2. analyze the distribution of transposon genes on plasmids.
+## Figure 3. analyze the distribution of transposon genes on plasmids.
 ## Don't run on all MGE genes to show that this is not an artifact of
 ## counting plasmid function genes!
 ## For the sake of this paper, we mainly care about transposons.
@@ -495,46 +496,48 @@ transposon.annotated.PCN.data <- PCN.data |>
 
 ## scatterplot of log10(Normalized plasmid copy number) vs. log10(plasmid length).
 ## using a somewhat unusual plotting strategy to avoid overplotting points with transposons
-Fig2_base <- make_transposon_PCN_base_plot(transposon.annotated.PCN.data)
+Fig3_base <- make_transposon_PCN_base_plot(transposon.annotated.PCN.data)
 
 ## add the marginal histogram to Figure A.
-Fig2A <- ggExtra::ggMarginal(Fig2_base, margins="both")
+Fig3A <- ggExtra::ggMarginal(Fig3_base, margins="both")
 
-## Figure 2B: facet by ecological annotation.
+## Figure 3B: facet by ecological annotation.
 ## By eye, looks like there may be some enrichment of transposons on small plasmids
 ## in humans but unclear-- need statistics to be rigorous.
-Fig2B <- Fig2_base + guides(color = "none") + facet_wrap(.~Annotation)
+Fig3B <- Fig3_base + guides(color = "none") + facet_wrap(.~Annotation)
 
 
-## Figure 2CD: show differences in mobility type.
+## Figure 3CD: show differences in mobility type.
 ## IMPORTANT: report in figure legend that NA datapoints were removed.
-Fig2C_base <- transposon.annotated.PCN.data |>
+Fig3C_base <- transposon.annotated.PCN.data |>
   filter(!is.na(PredictedMobility)) |>
   filter(has_transposon==FALSE) |>
   make_PCN_base_plot() + ggtitle("transposon− plasmids")
 
 ## Get the legend.
-Fig2CD_legend <- get_legend(Fig2C_base)
+Fig3CD_legend <- get_legend(Fig3C_base)
 ## now remove the legend from base figure.
-Fig2C_base <- Fig2C_base + guides(color="none")
-Fig2C <- ggExtra::ggMarginal(Fig2C_base, groupColour = TRUE, groupFill = TRUE, margins="both")
+Fig3C_base <- Fig3C_base + guides(color="none")
+Fig3C <- ggExtra::ggMarginal(Fig3C_base, groupColour = TRUE, groupFill = TRUE, margins="both")
 
-Fig2D_base <- transposon.annotated.PCN.data |>
+Fig3D_base <- transposon.annotated.PCN.data |>
   filter(!is.na(PredictedMobility)) |>
   filter(has_transposon==TRUE) |>
   make_PCN_base_plot() + ggtitle("transposon+ plasmids") + guides(color="none")
-Fig2D <- ggExtra::ggMarginal(Fig2D_base, groupColour = TRUE, groupFill = TRUE, margins="both")
+Fig3D <- ggExtra::ggMarginal(Fig3D_base, groupColour = TRUE, groupFill = TRUE, margins="both")
 
-Fig2CD <- plot_grid(plot_grid(Fig2C, Fig2D, labels = c("C","D"), nrow=1), Fig2CD_legend, nrow=2,rel_heights=c(1,0.05))
+Fig3CD <- plot_grid(plot_grid(Fig3C, Fig3D, labels = c("C","D"), nrow=1), Fig3CD_legend, nrow=2,rel_heights=c(1,0.05))
 
-Fig2 <- plot_grid(plot_grid(Fig2A, Fig2B, labels = c("A", "B"), nrow = 1), Fig2CD, nrow = 2)
+Fig3 <- plot_grid(plot_grid(Fig3A, Fig3B, labels = c("A", "B"), nrow = 1), Fig3CD, nrow = 2)
 
-## Draft figure 2, showing that transposons are largely on large conjugative plasmids,
+## Draft figure 3, showing that transposons are largely on large conjugative plasmids,
 ## and rarely on small plasmids (but this is observed).
-ggsave("../results/Fig2.pdf", Fig2, width=7.5, height=8.5)
+ggsave("../results/Fig3.pdf", Fig3, width=7.5, height=8.5)
 
 ###########################################################################
 ## Given these findings, what functions ARE found on smaller plasmids <10kB in size?
+## Let's take a look.
+## Finding: significant linkage between ARGs and transposases on small plasmids.
 
 small.plasmid.proteins <- plasmid.proteins |> filter(replicon_length < SIZE_THRESHOLD)
 
@@ -556,21 +559,20 @@ small.plasmids <- PCN.data |>
   filter(replicon_length < SIZE_THRESHOLD) |>
   as_tibble()
 
-
 ## what about transposons on these guys?
 transposons.on.small.plasmids.with.ARGs <- plasmid.MGEs |>
   filter(str_detect(product, transposon.keywords)) |> 
   filter(SeqID %in% small.plasmid.ARGs$SeqID)
-## THIS IS A SUPER PROMISING RESULT!
+## THIS IS A NICE RESULT!
 ## there are 197 cases of transposons on these 223 small plasmids with ARGs.
 
 ## now compare to baseline.
-## There are 974 cases of transposons on small plasmids.
+## There are 974 cases of transposases on small plasmids.
 transposons.on.small.plasmids <- plasmid.MGEs |>
   filter(str_detect(product, transposon.keywords)) |> 
   filter(replicon_length < SIZE_THRESHOLD)
 
-## 768 small plasmids have transposons, out of 3364 plasmids.
+## 768 small plasmids have transposons, out of 3364 small plasmids.
 length(unique(transposons.on.small.plasmids$SeqID))
 length(unique(small.plasmids$SeqID))
 
@@ -580,8 +582,52 @@ length(unique(small.plasmids.with.ARGs$SeqID))
 
 ## This looks like a super significant result, showing an association
 ## between ARGs and transposons on small plasmids!!!
-## TODO: double-check this, and make this argument more rigorous.
 
+## Make a contingency table to test.
+# ARG+/Tn+ ARG+/Tn-
+# ARG-/Tn+ ARG-/Tn-
+ARG.Tn.contingency.table <- matrix(
+  c(161, 223-161,
+    768-161, (3364 - 161 - (223-161) - (768 - 161))),
+  nrow = 2,
+  byrow = TRUE
+)
+
+## Odds ratio: 10.8
+fisher.test(ARG.Tn.contingency.table)
+## p < 1e-55
+fisher.test(ARG.Tn.contingency.table)$p.value
+
+###################################################################################
+## Hypothesis: genomes containing small plasmids with ARGs are associated with bloodstream infections.
+## Finding: Yes, highly significant association.
+
+## 36 genomes with small plasmids with ARGs isolated from blood.
+length(unique(filter(small.plasmids.with.ARGs, str_detect(isolation_source, "blood"))$AnnotationAccession))
+
+##210 genomes have small plasmids with ARGs.
+genomes.with.small.ARG.plasmids <- unique(small.plasmids.with.ARGs$AnnotationAccession)
+
+## 298 genomes isolated from blood.
+length(unique(filter(PCN.data, str_detect(isolation_source, "blood"))$AnnotationAccession))
+
+## 4644 genomes total.
+length(unique(PCN.data$AnnotationAccession))
+
+## Make a contingency table to test.
+# Blood+/small_ARG_plasmid+ Blood-/small_ARG_plasmid+
+# Blood+/small_ARG_plasmid- Blood-/small_ARG_plasmid-
+blood.small.ARG.plasmid.contingency.table <- matrix(
+  c(36, 210-36,
+    298-36, (4464 - 36 - (210-36) - (298-36))), 
+  nrow = 2,
+  byrow = TRUE
+)
+
+## Odds ratio: 3.15
+fisher.test(blood.small.ARG.plasmid.contingency.table)
+## p-value = 7.68e-08
+fisher.test(blood.small.ARG.plasmid.contingency.table)$p.value
 
 ################################################################################
 ## Analyze duplicate pairs that are found on small plasmids and on big plasmids.
@@ -645,3 +691,16 @@ duplicated.plasmid.proteins.in.candidate.mothership.genomes <- duplicated.protei
 write.csv(duplicated.plasmid.proteins.in.candidate.mothership.genomes,
           "../results/duplicated-plasmid-proteins-in-candidate-mothership-genomes.csv", quote=F, row.names=F)
 
+## look at the isolation sources for these genomes.
+unique(candidate.mothership.gbk.annotation$isolation_source)
+
+################################################################################
+## Figure 5: Bioinformatic evidence for mothership hypothesis:
+## duplicated ARG-transposons found on small multicopy plasmids and large conjugative plasmids or chromosomes.
+## Figure that summarizes connections between small multicopy plasmids and large conjugative plasmids in my bioinformatic screen.
+
+## 86 genomes
+TestTable <- candidate.mothership.gbk.annotation |>
+  select(AnnotationAccession, Organism, Strain, Genus, host, isolation_source) |>
+  distinct() |>  ## get rid of duplicates from SeqType field.
+  arrange(Genus)
