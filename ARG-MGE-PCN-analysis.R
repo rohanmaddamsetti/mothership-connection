@@ -7,9 +7,7 @@ library(tidyverse)
 library(cowplot)
 library(data.table)
 library(ggExtra)
-
-library(viridis) ## for viridis palettes
-library(scico) ## in case these palettes useful: https://github.com/thomasp85/scico
+library(scico) ## Nice scientific palettes: https://github.com/thomasp85/scico
 
 ## size threshold for calling small plasmids
 SIZE_THRESHOLD <- 10000
@@ -709,17 +707,67 @@ unique(candidate.mothership.gbk.annotation$isolation_source)
 ## Figure 5: Bioinformatic evidence for mothership hypothesis:
 ## duplicated ARG-transposons found on small multicopy plasmids and on another plasmid as well.
 
-## TODO: ANNOTATE CLINICAL SAMPLES USING MYLLANNOTATOR!
+## Design: an arc diagram. Each row is a genome; each point is a distinct
+## plasmid (positioned by log10 length); a shallow arc connects two plasmids
+## within a genome whenever they carry the same ARG (identical product
+## annotation AND identical protein sequence). Multiple ARGs shared by the
+## same plasmid pair are drawn as nested arcs.
+
+## classify each ARG into a drug class, reusing the antibiotic keyword
+## regexes already defined above so the classification stays consistent
+## with the rest of the analysis.
+classify_ARG_class <- function(product) {
+  case_when(
+    str_detect(product, chloramphenicol.keywords) ~ "Chloramphenicol",
+    str_detect(product, tetracycline.keywords) ~ "Tetracycline",
+    str_detect(product, lincosamide.keywords) ~ "Lincosamide",
+    str_detect(product, beta.lactam.keywords) ~ "Beta-lactam",
+    str_detect(product, glycopeptide.keywords) ~ "Glycopeptide",
+    str_detect(product, polypeptide.keywords) ~ "Polypeptide",
+    str_detect(product, DHFR.inhibitor.keywords) ~ "Sulfonamide/DHFR",
+    str_detect(product, aminoglycoside.and.quinolone.keywords) ~ "Aminoglycoside/Quinolone",
+    str_detect(product, macrolide.keywords) ~ "Macrolide",
+    str_detect(product, multidrug.keywords) ~ "Multidrug",
+    str_detect(product, antimicrobial.keywords) ~ "Other antimicrobial",
+    TRUE ~ "Other"
+  )
+}
+
+
+ARG_CLASS_COLORS <- c(
+  "Beta-lactam" = "#d55e00",
+  "Aminoglycoside/Quinolone" = "#0072b2",
+  "Sulfonamide/DHFR" = "#009e73",
+  "Chloramphenicol" = "#cc79a7",
+  "Other antimicrobial" = "#999999")
+
+Fig5.data <- candidate.mothership.plasmid.ARGs |>
+  ## Add genome labels: Organism + Strain is not always unique (some records have
+  ## blank/NA Strain), so append the short RefSeq accession to guarantee a
+  ## unique, traceable label for each genome.
+  mutate(short_accession = str_extract(AnnotationAccession, "^GCF_[0-9.]+")) |>
+  mutate(Sample = paste0(Organism, " (", short_accession, ")"))
+
+## order genomes so that the busiest "mothership" cases (most shared-ARG
+## links) are shown at the top of the figure.
+genome.link.counts <- Fig5.data |>
+  distinct(AnnotationAccession, product, sequence, SeqID) |>
+  summarize(n_plasmids_sharing = n_distinct(SeqID),
+            .by = c(AnnotationAccession, product, sequence)) |>
+  filter(n_plasmids_sharing > 1) |>
+  summarize(n_links = sum(choose(n_plasmids_sharing, 2)),
+            .by = AnnotationAccession) |>
+  arrange(desc(n_links)) |>
+  left_join(sample.lookup, by = "AnnotationAccession")
+
+sample.order <- rev(genome.link.counts$Sample) ## smallest at bottom, busiest at top
+
 
 Fig5.plasmid.ARG.count <- candidate.mothership.plasmid.ARGs |>
-  filter(Annotation == "Humans") |>
-  filter(Genus == "Klebsiella") |>
   summarize(ARG_count = n(), .by = c(product, sequence)) |>
   arrange(desc(ARG_count))
 
 Fig5 <- candidate.mothership.plasmid.ARGs |>
-  filter(Annotation == "Humans") |>
-  filter(Genus == "Klebsiella") |>
   left_join(Fig5.plasmid.ARG.count) |>
   mutate(ARG = fct_reorder(product, ARG_count, .desc = FALSE)) |>
   mutate(Sample = paste(Organism, Strain)) |> 
