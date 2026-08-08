@@ -1,0 +1,1 @@
+Consider a microbial sample from the host "{1}" and the isolation source "{2}". Label the sample as one of the following categories: {categories}. Give a strictly one-word response without punctuation marks.

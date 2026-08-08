@@ -239,13 +239,13 @@ Fig2_base <- make_ARG_PCN_base_plot(ARG.annotated.PCN.data)
 ## add the marginal histogram to Figure A.
 Fig2A <- ggExtra::ggMarginal(Fig2_base, margins="both")
 
-## Figure 1B: facet by ecological annotation.
+## Figure 2B: facet by ecological annotation.
 ## By eye, looks like there may be some enrichment of ARGs on small plasmids
 ## in humans but unclear-- need statistics to be rigorous.
 Fig2B <- Fig2_base + guides(color = "none") + facet_wrap(.~Annotation)
 
 
-## Figure 1CD: show differences in mobility type.
+## Figure 2CD: show differences in mobility type.
 ## IMPORTANT: report in figure legend that NA datapoints were removed.
 Fig2C_base <- ARG.annotated.PCN.data |>
   filter(!is.na(PredictedMobility)) |>
@@ -268,7 +268,7 @@ Fig2CD <- plot_grid(plot_grid(Fig2C, Fig2D, nrow=1, labels=c("C","D")),Fig2CD_le
 
 Fig2 <- plot_grid(plot_grid(Fig2A, Fig2B, nrow = 1, labels=c("A","B")), Fig2CD, nrow = 2)
 
-## Draft figure 1, showing that ARGs are largely on large conjugative plasmids,
+## Draft figure 2, showing that ARGs are largely on large conjugative plasmids,
 ## and rarely on small plasmids (but this is observed).
 ggsave("../results/Fig2.pdf", Fig2, width=7.5,height=8.5)
 
@@ -702,6 +702,8 @@ write.csv(duplicated.plasmid.proteins.in.candidate.mothership.genomes,
 ## look at the isolation sources for these genomes.
 unique(candidate.mothership.gbk.annotation$isolation_source)
 
+################################################################################
+## Figure 4: Mathematical modeling figure using Pluto notebook in Julia.
 
 ################################################################################
 ## Figure 5: Bioinformatic evidence for mothership hypothesis:
@@ -741,44 +743,116 @@ ARG_CLASS_COLORS <- c(
   "Chloramphenicol" = "#cc79a7",
   "Other antimicrobial" = "#999999")
 
+
+## generate points along a shallow quadratic Bezier arc between two
+## plasmids that share an ARG (same y, different x).
+make_arc_points <- function(x0, x1, y, height, n = 40) {
+  t <- seq(0, 1, length.out = n)
+  x_ctrl <- (x0 + x1) / 2
+  y_ctrl <- y + height
+  tibble(
+    x = (1 - t)^2 * x0 + 2 * (1 - t) * t * x_ctrl + t^2 * x1,
+    y = (1 - t)^2 * y  + 2 * (1 - t) * t * y_ctrl  + t^2 * y)
+}
+
+
+ARC_BASE_HEIGHT <- 0.16
+ARC_STACK_STEP <- 0.10
+
+################################################################################
+## get myLLannotator annotations for clinical genomes.
+clinical.gbk.annotation <- read.csv("../results/labeled-gbk-annotation-table.csv") |>
+  rename(ClinicalAnnotation = Annotation)
+
 Fig5.data <- candidate.mothership.plasmid.ARGs |>
   ## Add genome labels: Organism + Strain is not always unique (some records have
   ## blank/NA Strain), so append the short RefSeq accession to guarantee a
   ## unique, traceable label for each genome.
   mutate(short_accession = str_extract(AnnotationAccession, "^GCF_[0-9.]+")) |>
-  mutate(Sample = paste0(Organism, " (", short_accession, ")"))
+  mutate(Sample = paste0(Organism, " (", short_accession, ")")) |>
+  left_join(clinical.gbk.annotation) |>
+  filter(ClinicalAnnotation == "Clinical")
+
 
 ## order genomes so that the busiest "mothership" cases (most shared-ARG
 ## links) are shown at the top of the figure.
 genome.link.counts <- Fig5.data |>
-  distinct(AnnotationAccession, product, sequence, SeqID) |>
+  distinct(Sample, AnnotationAccession, product, sequence, SeqID) |>
   summarize(n_plasmids_sharing = n_distinct(SeqID),
-            .by = c(AnnotationAccession, product, sequence)) |>
+            .by = c(Sample, AnnotationAccession, product, sequence)) |>
   filter(n_plasmids_sharing > 1) |>
   summarize(n_links = sum(choose(n_plasmids_sharing, 2)),
-            .by = AnnotationAccession) |>
-  arrange(desc(n_links)) |>
-  left_join(sample.lookup, by = "AnnotationAccession")
+            .by = c(Sample, AnnotationAccession)) |>
+  arrange(desc(n_links))
+
 
 sample.order <- rev(genome.link.counts$Sample) ## smallest at bottom, busiest at top
 
 
-Fig5.plasmid.ARG.count <- candidate.mothership.plasmid.ARGs |>
-  summarize(ARG_count = n(), .by = c(product, sequence)) |>
-  arrange(desc(ARG_count))
+ARG.plasmid.nodes <- Fig5.data |>
+  distinct(Sample, AnnotationAccession, product, sequence, SeqID, replicon_length) |>
+  mutate(Sample = factor(Sample, levels = sample.order)) |>
+  mutate(log10_length = log10(replicon_length)) |>
+  mutate(PlasmidSize = ifelse(replicon_length < SIZE_THRESHOLD, "<10 kb", ">=10 kb"))
 
-Fig5 <- candidate.mothership.plasmid.ARGs |>
-  left_join(Fig5.plasmid.ARG.count) |>
-  mutate(ARG = fct_reorder(product, ARG_count, .desc = FALSE)) |>
-  mutate(Sample = paste(Organism, Strain)) |> 
-  ggplot(aes(x = replicon_length, y = ARG, color = AnnotationAccession)) +
-  geom_point(alpha=0.5,size=4) +
+
+## every plasmid-plasmid pair, within a genome, that shares an ARG
+## (identical product annotation AND identical protein sequence).
+Fig5.edges <- ARG.plasmid.nodes |>
+  inner_join(ARG.plasmid.nodes,
+             by = c("AnnotationAccession", "product", "sequence", "Sample"),
+             suffix = c("1", "2"),
+             relationship = "many-to-many") |>
+  filter(SeqID1 < SeqID2) |> ## keep each unordered pair once
+  mutate(ARG_class = classify_ARG_class(product)) |>
+  ## stack multiple ARGs shared by the exact same plasmid pair as nested
+  ## arcs, from shallowest (rank 1) to tallest.
+  mutate(stack_rank = row_number(), .by = c(AnnotationAccession, SeqID1, SeqID2)) |>
+  mutate(y = as.numeric(Sample)) |>
+  mutate(arc_id = paste(AnnotationAccession, SeqID1, SeqID2, product, sep = "_"))
+
+
+Fig5.nodes <- ARG.plasmid.nodes |>
+  distinct(AnnotationAccession, SeqID, Sample, log10_length, PlasmidSize, replicon_length)
+
+
+Fig5.arcs <- Fig5.edges |>
+  mutate(height = ARC_BASE_HEIGHT + (stack_rank - 1) * ARC_STACK_STEP) |>
+  pmap_dfr(function(log10_length1, log10_length2, y, height, arc_id, ARG_class, ...) {
+    make_arc_points(log10_length1, log10_length2, y, height) |>
+      mutate(arc_id = arc_id, ARG_class = ARG_class)
+  })
+
+## keep y numeric throughout (nodes + arcs) so both layers share one
+## continuous scale, then relabel the axis with genome names by hand.
+sample.levels <- levels(Fig5.nodes$Sample)
+
+
+Fig5_base <- ggplot() +
+  geom_path(data = Fig5.arcs,
+            aes(x = x, y = y, group = arc_id, color = ARG_class),
+            linewidth = 0.6, alpha = 0.8, lineend = "round") +
+  geom_point(data = Fig5.nodes,
+             aes(x = log10_length, y = as.numeric(Sample), shape = PlasmidSize),
+             size = 2.6, color = "grey20", fill = "white", stroke = 0.9) +
+  scale_shape_manual(values = c(21, 19), name = "plasmid size") +
+  scale_color_manual(values = ARG_CLASS_COLORS, name = "shared ARG class", na.value = "grey50") +
+  scale_y_continuous(breaks = seq_along(sample.levels), labels = sample.levels,
+                      expand = expansion(add = 0.6)) +
   theme_classic() +
-  xlab("plasmid length") +
-  ggtitle("Clinical Klebsiella isolates show\nevidence of a mothership connection\namong coexisting plasmids") +
-  ##  theme(legend.position="bottom")
-  guides(color = "none")
+  xlab("log10(plasmid length)") +
+  ylab(NULL) +
+  ggtitle("The mothership connection: amplification of ARGs\non small plasmids in clinical isolates") +
+  theme(
+    axis.text.y = element_text(size = 7),
+    plot.title = element_text(size = 11),
+    legend.position = "right") +
+  guides(shape = "none")
 
-ggsave("../results/Fig5.pdf", Fig5, width=8, height=4)
+## Get the legend.
+Fig5_legend <- get_legend(Fig5_base)
+## now remove the legend from base figure.
+Fig5_base <- Fig5_base + guides(color="none")
 
-Fig5
+Fig5 <- plot_grid(plot_grid(Fig5_legend, NULL,nrow=1), Fig5_base, nrow=2, rel_heights=c(0.2,0.8))
+ggsave("../results/Fig5_base.pdf", Fig5, width = 7, height = 7)
