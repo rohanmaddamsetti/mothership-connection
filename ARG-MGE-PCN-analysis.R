@@ -727,10 +727,10 @@ Fig5 <- candidate.mothership.plasmid.ARGs |>
   geom_point(alpha=0.5,size=4) +
   theme_classic() +
   xlab("plasmid length") +
-  ggtitle("The mothership connection in clinical Klebsiella") +
+  ggtitle("Clinical Klebsiella isolates show\nevidence of a mothership connection\namong coexisting plasmids") +
   ##  theme(legend.position="bottom")
   guides(color = "none")
 
-ggsave("../results/Fig5.pdf", Fig5, width=9, height=4)
+ggsave("../results/Fig5.pdf", Fig5, width=8, height=4)
 
 Fig5
