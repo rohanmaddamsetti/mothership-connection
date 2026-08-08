@@ -59,18 +59,6 @@ antibiotic.keywords <- paste(
 antibiotic.or.MGE.keywords <- paste(MGE.keywords,antibiotic.keywords,sep="|")
 
 
-categorize.as.MGE.ARG.or.other <- function(product) {
-  if (is.na(product))
-    "Other function"
-  else if (str_detect(product, antibiotic.keywords))
-    "ARG"
-  else if (str_detect(product, MGE.keywords))
-    "MGE"
-  else
-    "Other function"
-}
-
-
 make_PCN_base_plot <- function(my.PCN.data) {
   ## PCN plot colored by PredictedMobility
   my.PCN.data |> 
@@ -197,11 +185,10 @@ gbk.annotation <- read.csv(
 stopifnot(nrow(filter(episome.database, !(AnnotationAccession %in% gbk.annotation$AnnotationAccession))) == 0)
 
 ## import the file containing plasmid proteins.
-## I can save a ton of memory if I don't import the sequence column,
-## and by using the data.table package for import.
-plasmid.proteins <- data.table::fread(
-  "../results/filtered-plasmid-proteins.csv",
-  drop="sequence") |>
+## Save memory by using the data.table package for import.
+## import the sequence column to cross-check with duplicated.ARGs
+## for Figure 5 analysis.
+plasmid.proteins <- data.table::fread("../results/filtered-plasmid-proteins.csv") |>
   left_join(gbk.annotation)
 
 plasmid.MGE.and.ARG.proteins <- plasmid.proteins |>
@@ -512,7 +499,7 @@ Fig3B <- Fig3_base + guides(color = "none") + facet_wrap(.~Annotation)
 Fig3C_base <- transposon.annotated.PCN.data |>
   filter(!is.na(PredictedMobility)) |>
   filter(has_transposon==FALSE) |>
-  make_PCN_base_plot() + ggtitle("transposon− plasmids")
+  make_PCN_base_plot() + ggtitle("transposon- plasmids")
 
 ## Get the legend.
 Fig3CD_legend <- get_legend(Fig3C_base)
@@ -548,16 +535,19 @@ small.plasmid.function.summary <- small.plasmid.proteins |>
 ## there are 1336 ARGs found on small plasmids.
 small.plasmid.ARGs <- small.plasmid.proteins |> 
   filter(str_detect(product, antibiotic.keywords))
+nrow(small.plasmid.ARGs)
 
 ## what are these small plasmids with ARGs?
 small.plasmids.with.ARGs <- PCN.data |>
   filter(SeqID %in% small.plasmid.ARGs$SeqID)
 ## There are 223 of these small plasmids with ARGs.
+nrow(small.plasmids.with.ARGs)
 
 ## there are 3,364 small plasmids.
 small.plasmids <- PCN.data |>
   filter(replicon_length < SIZE_THRESHOLD) |>
   as_tibble()
+nrow(small.plasmids)
 
 ## what about transposons on these guys?
 transposons.on.small.plasmids.with.ARGs <- plasmid.MGEs |>
@@ -565,12 +555,14 @@ transposons.on.small.plasmids.with.ARGs <- plasmid.MGEs |>
   filter(SeqID %in% small.plasmid.ARGs$SeqID)
 ## THIS IS A NICE RESULT!
 ## there are 197 cases of transposons on these 223 small plasmids with ARGs.
+nrow(transposons.on.small.plasmids.with.ARGs)
 
 ## now compare to baseline.
 ## There are 974 cases of transposases on small plasmids.
 transposons.on.small.plasmids <- plasmid.MGEs |>
   filter(str_detect(product, transposon.keywords)) |> 
   filter(replicon_length < SIZE_THRESHOLD)
+nrow(transposons.on.small.plasmids)
 
 ## 768 small plasmids have transposons, out of 3364 small plasmids.
 length(unique(transposons.on.small.plasmids$SeqID))
@@ -607,6 +599,7 @@ length(unique(filter(small.plasmids.with.ARGs, str_detect(isolation_source, "blo
 
 ##210 genomes have small plasmids with ARGs.
 genomes.with.small.ARG.plasmids <- unique(small.plasmids.with.ARGs$AnnotationAccession)
+length(genomes.with.small.ARG.plasmids)
 
 ## 298 genomes isolated from blood.
 length(unique(filter(PCN.data, str_detect(isolation_source, "blood"))$AnnotationAccession))
@@ -636,18 +629,19 @@ fisher.test(blood.small.ARG.plasmid.contingency.table)$p.value
 
 duplicated.proteins <- read.csv("../results/duplicate-proteins.csv")
 
-duplicated.ARGs <- duplicated.proteins |>
+duplicated.ARGs.only.on.plasmids <- duplicated.proteins |>
   filter(str_detect(product, antibiotic.keywords))
 
 ## how many of the small plasmid ARGs are duplicated?
-## to estimate, filter duplicated.ARGs based on the (AnnotationAccession, product)
+## to estimate, filter duplicated.ARGs based on the (AnnotationAccession, product, sequence)
 ## rows in small.plasmid.ARGs.
 small.plasmids.with.ARGs.filter.df <- small.plasmid.ARGs |>
-  select(AnnotationAccession, product) |> distinct()
+  select(AnnotationAccession, product, sequence) |> distinct()
 
-## there are 109 cases of like this.
-duplicated.ARGs.with.copy.on.small.plasmid <- duplicated.ARGs |>
+## there are 108 cases of duplicated ARGs with a copy on a small plasmid.
+duplicated.ARGs.with.copy.on.small.plasmid <- duplicated.ARGs.only.on.plasmids |>
   semi_join(small.plasmids.with.ARGs.filter.df)
+nrow(duplicated.ARGs.with.copy.on.small.plasmid)
 
 duplicated.ARG.with.copy.on.small.plasmid.filter <- duplicated.ARGs.with.copy.on.small.plasmid |>
   select(AnnotationAccession, product, sequence) |> distinct()
@@ -655,20 +649,36 @@ duplicated.ARG.with.copy.on.small.plasmid.filter <- duplicated.ARGs.with.copy.on
 ## now, check to see if these are duplicated on the same plasmid,
 ## or duplicated across plasmids (say between large and small).
 
-candidate.mothership.plasmid.ARGs <- plasmid.ARGs |>
+distinct.plasmid.filter.for.mothership.ARGs <- plasmid.ARGs |>
   semi_join(duplicated.ARG.with.copy.on.small.plasmid.filter) |>
-  ## get PCN data too.
-  left_join(PCN.data) |> 
-  arrange(AnnotationAccession,product,replicon_length)
+  arrange(AnnotationAccession,product,replicon_length) |>
+  ## get rid of ARGs that are duplicated on the same plasmid
+  select(-SeqIndex) |>
+  distinct() |>  ## get rid of duplicate ARGs on the same plasmid
+  summarize(distinct_plasmids_with_ARG = n_distinct(SeqID),
+            .by=c(AnnotationAccession, product, sequence, SeqType,
+                  host, isolation_source, Annotation, Organism, Strain,
+                  TaxonomicGroup, TaxonomicSubgroup, Genus)) |>
+  ## filter for genomes with the ARG on multiple plasmids
+  filter(distinct_plasmids_with_ARG > 1)
+
+## 184 mothership ARGs
+candidate.mothership.plasmid.ARGs <- plasmid.ARGs |>
+  semi_join(distinct.plasmid.filter.for.mothership.ARGs) |>
+  arrange(AnnotationAccession,product,replicon_length) |>
+  ## manually remove a misannotated plasmid
+  ## (same plasmid annotated as two separate plasmids)
+  filter(AnnotationAccession != "GCF_001558295.2_ASM155829v2")
+nrow(candidate.mothership.plasmid.ARGs)
 
 ## write to file to examine by eye.
 write.csv(candidate.mothership.plasmid.ARGs,
-          "../results/candidate-mothership-plasmid-ARGs.csv",
-          quote=F, row.names=F)
+          "../results/candidate-mothership-plasmid-ARGs.csv", quote=F, row.names=F)
 ## These look quite promising!
+## This will be the basis for Figure 5.
 
-## 86 genomes.
-unique(candidate.mothership.plasmid.ARGs$AnnotationAccession)
+## 63 genomes with candidate mothership ARGs
+length(unique(candidate.mothership.plasmid.ARGs$AnnotationAccession))
 
 ## let's look at their data.
 candidate.mothership.gbk.annotation <- gbk.annotation |>
@@ -694,13 +704,33 @@ write.csv(duplicated.plasmid.proteins.in.candidate.mothership.genomes,
 ## look at the isolation sources for these genomes.
 unique(candidate.mothership.gbk.annotation$isolation_source)
 
+
 ################################################################################
 ## Figure 5: Bioinformatic evidence for mothership hypothesis:
-## duplicated ARG-transposons found on small multicopy plasmids and large conjugative plasmids or chromosomes.
-## Figure that summarizes connections between small multicopy plasmids and large conjugative plasmids in my bioinformatic screen.
+## duplicated ARG-transposons found on small multicopy plasmids and on another plasmid as well.
 
-## 86 genomes
-TestTable <- candidate.mothership.gbk.annotation |>
-  select(AnnotationAccession, Organism, Strain, Genus, host, isolation_source) |>
-  distinct() |>  ## get rid of duplicates from SeqType field.
-  arrange(Genus)
+## TODO: ANNOTATE CLINICAL SAMPLES USING MYLLANNOTATOR!
+
+Fig5.plasmid.ARG.count <- candidate.mothership.plasmid.ARGs |>
+  filter(Annotation == "Humans") |>
+  filter(Genus == "Klebsiella") |>
+  summarize(ARG_count = n(), .by = c(product, sequence)) |>
+  arrange(desc(ARG_count))
+
+Fig5 <- candidate.mothership.plasmid.ARGs |>
+  filter(Annotation == "Humans") |>
+  filter(Genus == "Klebsiella") |>
+  left_join(Fig5.plasmid.ARG.count) |>
+  mutate(ARG = fct_reorder(product, ARG_count, .desc = FALSE)) |>
+  mutate(Sample = paste(Organism, Strain)) |> 
+  ggplot(aes(x = replicon_length, y = ARG, color = AnnotationAccession)) +
+  geom_point(alpha=0.5,size=4) +
+  theme_classic() +
+  xlab("plasmid length") +
+  ggtitle("The mothership connection in clinical Klebsiella") +
+  ##  theme(legend.position="bottom")
+  guides(color = "none")
+
+ggsave("../results/Fig5.pdf", Fig5, width=9, height=4)
+
+Fig5
