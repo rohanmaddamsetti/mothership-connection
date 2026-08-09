@@ -250,7 +250,7 @@ Fig2B <- Fig2_base + guides(color = "none") + facet_wrap(.~Annotation)
 Fig2C_base <- ARG.annotated.PCN.data |>
   filter(!is.na(PredictedMobility)) |>
   filter(has_ARG==FALSE) |>
-  make_PCN_base_plot() + ggtitle("ARG− plasmids")
+  make_PCN_base_plot() + ggtitle("ARG- plasmids")
 
 ## Get the legend.
 Fig2CD_legend <- get_legend(Fig2C_base)
@@ -743,21 +743,9 @@ ARG_CLASS_COLORS <- c(
   "Chloramphenicol" = "#cc79a7",
   "Other antimicrobial" = "#999999")
 
-
-## generate points along a shallow quadratic Bezier arc between two
-## plasmids that share an ARG (same y, different x).
-make_arc_points <- function(x0, x1, y, height, n = 40) {
-  t <- seq(0, 1, length.out = n)
-  x_ctrl <- (x0 + x1) / 2
-  y_ctrl <- y + height
-  tibble(
-    x = (1 - t)^2 * x0 + 2 * (1 - t) * t * x_ctrl + t^2 * x1,
-    y = (1 - t)^2 * y  + 2 * (1 - t) * t * y_ctrl  + t^2 * y)
-}
-
-
-ARC_BASE_HEIGHT <- 0.16
-ARC_STACK_STEP <- 0.10
+## vertical offset between parallel lines connecting the same plasmid pair
+## (subway-map style), so multiple shared ARGs stay visually distinct.
+LINE_OFFSET_STEP <- 0.10
 
 ################################################################################
 ## get myLLannotator annotations for clinical genomes.
@@ -805,40 +793,35 @@ Fig5.edges <- ARG.plasmid.nodes |>
              relationship = "many-to-many") |>
   filter(SeqID1 < SeqID2) |> ## keep each unordered pair once
   mutate(ARG_class = classify_ARG_class(product)) |>
-  ## stack multiple ARGs shared by the exact same plasmid pair as nested
-  ## arcs, from shallowest (rank 1) to tallest.
-  mutate(stack_rank = row_number(), .by = c(AnnotationAccession, SeqID1, SeqID2)) |>
-  mutate(y = as.numeric(Sample)) |>
-  mutate(arc_id = paste(AnnotationAccession, SeqID1, SeqID2, product, sep = "_"))
+  ## offset multiple ARGs shared by the exact same plasmid pair into
+  ## parallel lines, centered on the node's y-position (subway-map
+  ## style), so the offsets stay
+  ## symmetric and legible when several edges share a pair.
+  mutate(stack_rank = row_number(), n_stack = n(),
+         .by = c(AnnotationAccession, SeqID1, SeqID2)) |>
+  mutate(y = as.numeric(Sample) + (stack_rank - (n_stack + 1) / 2) * LINE_OFFSET_STEP)
 
 
 Fig5.nodes <- ARG.plasmid.nodes |>
   distinct(AnnotationAccession, SeqID, Sample, log10_length, PlasmidSize, replicon_length)
 
 
-Fig5.arcs <- Fig5.edges |>
-  mutate(height = ARC_BASE_HEIGHT + (stack_rank - 1) * ARC_STACK_STEP) |>
-  pmap_dfr(function(log10_length1, log10_length2, y, height, arc_id, ARG_class, ...) {
-    make_arc_points(log10_length1, log10_length2, y, height) |>
-      mutate(arc_id = arc_id, ARG_class = ARG_class)
-  })
-
 ## keep y numeric throughout (nodes + arcs) so both layers share one
 ## continuous scale, then relabel the axis with genome names by hand.
 sample.levels <- levels(Fig5.nodes$Sample)
 
-
 Fig5_base <- ggplot() +
-  geom_path(data = Fig5.arcs,
-            aes(x = x, y = y, group = arc_id, color = ARG_class),
-            linewidth = 0.6, alpha = 0.8, lineend = "round") +
+  geom_segment(data = Fig5.edges,
+               aes(x = log10_length1, xend = log10_length2, y = y, yend = y,
+                   color = ARG_class),
+               linewidth = 0.3, alpha = 0.8, lineend = "round") +
   geom_point(data = Fig5.nodes,
              aes(x = log10_length, y = as.numeric(Sample), shape = PlasmidSize),
              size = 2.6, color = "grey20", fill = "white", stroke = 0.9) +
   scale_shape_manual(values = c(21, 19), name = "plasmid size") +
   scale_color_manual(values = ARG_CLASS_COLORS, name = "shared ARG class", na.value = "grey50") +
   scale_y_continuous(breaks = seq_along(sample.levels), labels = sample.levels,
-                      expand = expansion(add = 0.6)) +
+                     expand = expansion(add = 0.6)) +
   theme_classic() +
   xlab("log10(plasmid length)") +
   ylab(NULL) +
