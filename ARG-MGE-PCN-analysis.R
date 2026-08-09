@@ -762,20 +762,17 @@ Fig5.data <- candidate.mothership.plasmid.ARGs |>
   filter(ClinicalAnnotation == "Clinical")
 
 
-## order genomes so that the busiest "mothership" cases (most shared-ARG
-## links) are shown at the top of the figure.
-genome.link.counts <- Fig5.data |>
-  distinct(Sample, AnnotationAccession, product, sequence, SeqID) |>
-  summarize(n_plasmids_sharing = n_distinct(SeqID),
-            .by = c(Sample, AnnotationAccession, product, sequence)) |>
-  filter(n_plasmids_sharing > 1) |>
-  summarize(n_links = sum(choose(n_plasmids_sharing, 2)),
-            .by = c(Sample, AnnotationAccession)) |>
-  arrange(desc(n_links))
+## order genomes by the position of their smallest plasmid (the leftmost
+## node), so genomes with the largest "smallest plasmid" are shown at the
+## top of the figure and genomes with the smallest "smallest plasmid" are
+## shown at the bottom.
+genome.smallest.plasmid <- Fig5.data |>
+  distinct(Sample, AnnotationAccession, SeqID, replicon_length) |>
+  summarize(min_replicon_length = min(replicon_length), .by = Sample) |>
+  arrange(min_replicon_length)
 
-
-sample.order <- rev(genome.link.counts$Sample) ## smallest at bottom, busiest at top
-
+## order by smallest plasmid
+sample.order <- genome.smallest.plasmid$Sample
 
 ARG.plasmid.nodes <- Fig5.data |>
   distinct(Sample, AnnotationAccession, product, sequence, SeqID, replicon_length) |>
@@ -814,7 +811,7 @@ Fig5_base <- ggplot() +
   geom_segment(data = Fig5.edges,
                aes(x = log10_length1, xend = log10_length2, y = y, yend = y,
                    color = ARG_class),
-               linewidth = 0.3, alpha = 0.8, lineend = "round") +
+               linewidth = 0.6, alpha = 0.8, lineend = "round") +
   geom_point(data = Fig5.nodes,
              aes(x = log10_length, y = as.numeric(Sample), shape = PlasmidSize),
              size = 2.6, color = "grey20", fill = "white", stroke = 0.9) +
